@@ -1,6 +1,3 @@
-/// <reference path="types.ts" />
-/// <reference path="shared.ts" />
-
 namespace ts.server {
     export enum LogLevel {
         terse,
@@ -20,7 +17,7 @@ namespace ts.server {
         startGroup(): void;
         endGroup(): void;
         msg(s: string, type?: Msg): void;
-        getLogFileName(): string;
+        getLogFileName(): string | undefined;
     }
 
     // TODO: Use a const enum (https://github.com/Microsoft/TypeScript/issues/16804)
@@ -83,14 +80,6 @@ namespace ts.server {
         };
     }
 
-    export function mergeMapLikes<T extends object>(target: T, source: Partial<T>): void {
-        for (const key in source) {
-            if (hasProperty(source, key)) {
-                target[key] = source[key];
-            }
-        }
-    }
-
     export type NormalizedPath = string & { __normalizedPathTag: any };
 
     export function toNormalizedPath(fileName: string): NormalizedPath {
@@ -107,7 +96,7 @@ namespace ts.server {
     }
 
     export interface NormalizedPathMap<T> {
-        get(path: NormalizedPath): T;
+        get(path: NormalizedPath): T | undefined;
         set(path: NormalizedPath, value: T): void;
         contains(path: NormalizedPath): boolean;
         remove(path: NormalizedPath): void;
@@ -131,6 +120,7 @@ namespace ts.server {
         };
     }
 
+    /*@internal*/
     export interface ProjectOptions {
         configHasExtendsProperty: boolean;
         /**
@@ -139,14 +129,6 @@ namespace ts.server {
         configHasFilesProperty: boolean;
         configHasIncludeProperty: boolean;
         configHasExcludeProperty: boolean;
-        /**
-         * these fields can be present in the project file
-         */
-        files?: string[];
-        wildcardDirectories?: Map<WatchDirectoryFlags>;
-        compilerOptions?: CompilerOptions;
-        typeAcquisition?: TypeAcquisition;
-        compileOnSave?: boolean;
     }
 
     export function isInferredProjectName(name: string) {
@@ -159,7 +141,7 @@ namespace ts.server {
     }
 
     export function createSortedArray<T>(): SortedArray<T> {
-        return [] as SortedArray<T>;
+        return [] as any as SortedArray<T>; // TODO: GH#19873
     }
 }
 
@@ -169,7 +151,7 @@ namespace ts.server {
         private readonly pendingTimeouts: Map<any> = createMap<any>();
         private readonly logger?: Logger | undefined;
         constructor(private readonly host: ServerHost, logger: Logger) {
-            this.logger = logger.hasLevel(LogLevel.verbose) && logger;
+            this.logger = logger.hasLevel(LogLevel.verbose) ? logger : undefined;
         }
 
         /**
@@ -217,11 +199,11 @@ namespace ts.server {
             self.timerId = undefined;
 
             const log = self.logger.hasLevel(LogLevel.requestTime);
-            const before = log && self.host.getMemoryUsage();
+            const before = log && self.host.getMemoryUsage!(); // TODO: GH#18217
 
-            self.host.gc();
+            self.host.gc!(); // TODO: GH#18217
             if (log) {
-                const after = self.host.getMemoryUsage();
+                const after = self.host.getMemoryUsage!(); // TODO: GH#18217
                 self.logger.perftrc(`GC::before ${before}, after ${after}`);
             }
         }
@@ -264,14 +246,16 @@ namespace ts.server {
         return index === 0 || value !== array[index - 1];
     }
 
+    const indentStr = "\n    ";
+
     /* @internal */
     export function indent(str: string): string {
-        return "\n    " + str;
+        return indentStr + str.replace(/\n/g, indentStr);
     }
 
     /** Put stringified JSON on the next line, indented. */
     /* @internal */
     export function stringifyIndented(json: {}): string {
-        return "\n    " + JSON.stringify(json);
+        return indentStr + JSON.stringify(json);
     }
 }
